@@ -1,3 +1,6 @@
+# set env vars for the oh-my-posh
+$env:POSH="DARK"
+
 # init oh-my-posh with a theme
 oh-my-posh --init --shell pwsh --config "$env:USERPROFILE\oh-my-posh\inasena.json" | Invoke-Expression
 
