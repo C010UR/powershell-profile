@@ -149,13 +149,13 @@ function ffmpeg-Compress {
     } else {
         $extn = [IO.Path]::GetExtension($outputFile)
     }
-    if (!$extn) {
-        $outputFile = "$outputFile.mp4"
+    if (!$extn -or $extn -ne "mkv") {
+        $outputFile = "$outputFile.mkv"
     }
 
     $preset = $preset ? $preset : "medium"
 
-    ffmpeg -i $inputFile -c:v libx265 -crf 26 -preset $preset -c:a libvorbis -b:a 320k $outputFile
+    ffmpeg -i $inputFile -c:v libx265 -crf 28 -c:a libopus -b:a 320k -preset $preset $outputFile
 
     Beep
 }
