@@ -1,39 +1,43 @@
 # environmental variables
-
 $env:POSH="DARK"
 
 # Set PSReadLine options
 $PSReadLineOptions = @{
-    PredictionSource = "None"
+    CompletionQueryItems = 1
+    HistoryNoDuplicates = $true
+    PredictionSource = "Plugin"
     PredictionViewStyle = "InlineView"
+    ShowToolTips = $true
     WordDelimiters = ";:,.[]{}()/\|^&*-=+'""–—―_"
     Colors = @{
-        "Command"                   = [ConsoleColor]::Yellow
-        "Comment"                   = "`e[97;42m"
-        "ContinuationPrompt"        = [ConsoleColor]::White
-        "Default"                   = [ConsoleColor]::White
-        "Emphasis"                  = "`e[93;40m"
-        "Error"                     = [ConsoleColor]::Red
-        "InlinePrediction"          = "`e[90m" # bright black fg
-        "Keyword"                   = [ConsoleColor]::Green
-        "ListPrediction"            = [ConsoleColor]::DarkYellow
-        "ListPredictionSelected"    = "`e[100m"
-        "Member"                    = [ConsoleColor]::White
-        "Number"                    = [ConsoleColor]::DarkYellow
-        "Operator"                  = [ConsoleColor]::White
-        "Parameter"                 = [ConsoleColor]::Cyan
-        "Selection"                 = "`e[30;47m"
-        "String"                    = [ConsoleColor]::Blue
-        "Type"                      = [ConsoleColor]::DarkBlue
-        "Variable"                  = [ConsoleColor]::Green
+        # "Command"                   = [ConsoleColor]::Yellow
+        # "Comment"                   = "`e[42m" # green background
+        # "ContinuationPrompt"        = [ConsoleColor]::White
+        # "Default"                   = [ConsoleColor]::White
+        # "Emphasis"                  = [ConsoleColor]::White
+        # "Error"                     = [ConsoleColor]::Red
+        # "InlinePrediction"          = [ConsoleColor]::Black
+        # "Keyword"                   = [ConsoleColor]::Green
+        # "ListPrediction"            = [ConsoleColor]::DarkYellow
+        # "ListPredictionSelected"    = [ConsoleColor]::Black
+        # "Member"                    = [ConsoleColor]::White
+        # "Number"                    = [ConsoleColor]::DarkYellow
+        # "Operator"                  = [ConsoleColor]::White
+        # "Parameter"                 = [ConsoleColor]::Cyan
+        # "Selection"                 = "`e[30;47m"
+        # "String"                    = [ConsoleColor]::Blue
+        # "Type"                      = [ConsoleColor]::DarkBlue
+        # "Variable"                  = [ConsoleColor]::Green
     }
 }
+
 Set-PSReadLineOption @PSReadLineOptions
 
 # init oh-my-posh with a theme
 oh-my-posh --init --shell pwsh --config "$env:USERPROFILE\oh-my-posh\inasena.json" | Invoke-Expression
 
 # import modules
+Enable-PowerType
 Import-Module -Name Terminal-Icons
 Import-Module -Name posh-git
 
@@ -149,13 +153,13 @@ function ffmpeg-Compress {
     } else {
         $extn = [IO.Path]::GetExtension($outputFile)
     }
-    if (!$extn -or $extn -ne "mkv") {
-        $outputFile = "$outputFile.mkv"
+    if (!$extn -or $extn -ne "mp4") {
+        $outputFile = "$outputFile.mp4"
     }
 
     $preset = $preset ? $preset : "medium"
 
-    ffmpeg -i $inputFile -c:v libx265 -crf 28 -c:a libopus -b:a 320k -preset $preset $outputFile
+    ffmpeg -i $inputFile -c:v libx264 -crf 18 -preset $preset $outputFile
 
     Beep
 }
@@ -427,6 +431,46 @@ function yt-Thumbnail {
     & "$env:USERPROFILE\yt-dlp.exe" --write-thumbnail --skip-download -P $ytDownloadPath "$link"
 
     Beep
+}
+
+function Magick-ConvertSvgToPng {
+    <#
+        .SYNOPSIS
+            Converts svg image to png
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "File name")] 
+        [String]
+        $filename,
+        [Parameter(Mandatory = $false, Position = 10, HelpMessage = "Density")] 
+        [String]
+        $density = 1000
+    )
+
+    $newFilename = Modify-Filename $filename "magick" "png"
+
+    magick convert +antialias -background none -density "$density" "$filename" "$newFilename"
+
+    Beep
+}
+
+function Modify-Filename {
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "File name")] 
+        [String]
+        $filename,
+        [Parameter(Mandatory = $true, Position = 1, HelpMessage = "Modifier")] 
+        [String]
+        $modifier,
+        [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Extension")] 
+        [String]
+        $extension
+    )
+    $file = [System.IO.Path]::GetFileNameWithoutExtension($filename)
+    if (!$extension) {
+        $extension = [IO.Path]::GetExtension($filename)
+    }
+    return "$file-$modifier.$extension";
 }
 
 function Beep {
