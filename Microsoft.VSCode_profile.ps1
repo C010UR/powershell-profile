@@ -40,6 +40,7 @@ oh-my-posh --init --shell pwsh --config "$env:USERPROFILE\oh-my-posh\inasena.jso
 Enable-PowerType
 Import-Module -Name Terminal-Icons
 Import-Module -Name posh-git
+Import-Module -Name DockerCompletion
 
 # change encoding to UTF-8
 chcp 65001

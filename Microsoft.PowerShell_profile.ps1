@@ -40,6 +40,7 @@ oh-my-posh --init --shell pwsh --config "$env:USERPROFILE\oh-my-posh\inasena.jso
 Enable-PowerType
 Import-Module -Name Terminal-Icons
 Import-Module -Name posh-git
+Import-Module -Name DockerCompletion
 
 # change encoding to UTF-8
 chcp 65001
@@ -408,7 +409,7 @@ function yt-Audio {
         $link
     )
 
-    & "$env:USERPROFILE\yt-dlp.exe" -f 251 --extract-audio --audio-format opus --audio-quality 0 --embed-thumbnail --convert-thumbnails jpg --exec-before-download "magick convert %(thumbnails.-1.filepath)q -fuzz 25% -trim -quality 100 -sampling-factor 4:2:0 -define jpeg:dct-method=float %(thumbnails.-1.filepath)q" --add-metadata -P $ytDownloadPath  -o "%(creator)s - %(title)s.%(ext)s" "$link"
+    & yt-dlp -f 251 --extract-audio --audio-format opus --audio-quality 0 --embed-thumbnail --convert-thumbnails jpg --exec-before-download "magick convert %(thumbnails.-1.filepath)q -fuzz 25% -trim -quality 100 -sampling-factor 4:2:0 -define jpeg:dct-method=float %(thumbnails.-1.filepath)q" --add-metadata -P $ytDownloadPath  -o "%(creator)s - %(title)s.%(ext)s" "$link"
     Beep
 }
 
@@ -428,7 +429,7 @@ function yt-Thumbnail {
         $link
     )
 
-    & "$env:USERPROFILE\yt-dlp.exe" --write-thumbnail --skip-download -P $ytDownloadPath "$link"
+    & yt-dlp --write-thumbnail --skip-download -P $ytDownloadPath "$link"
 
     Beep
 }
