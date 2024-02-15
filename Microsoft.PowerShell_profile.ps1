@@ -1,15 +1,15 @@
 # environmental variables
-$env:POSH="DARK"
+$env:POSH = "DARK"
 
 # Set PSReadLine options
 $PSReadLineOptions = @{
     CompletionQueryItems = 1
-    HistoryNoDuplicates = $true
-    PredictionSource = "Plugin"
-    PredictionViewStyle = "InlineView"
-    ShowToolTips = $true
-    WordDelimiters = ";:,.[]{}()/\|^&*-=+'""–—―_"
-    Colors = @{
+    HistoryNoDuplicates  = $true
+    PredictionSource     = "Plugin"
+    PredictionViewStyle  = "InlineView"
+    ShowToolTips         = $true
+    WordDelimiters       = ";:,.[]{}()/\|^&*-=+'""–—―_"
+    Colors               = @{
         # "Command"                   = [ConsoleColor]::Yellow
         # "Comment"                   = "`e[42m" # green background
         # "ContinuationPrompt"        = [ConsoleColor]::White
@@ -41,21 +41,20 @@ Enable-PowerType
 Import-Module -Name Terminal-Icons
 Import-Module -Name posh-git
 Import-Module -Name DockerCompletion
+Import-Module -Name scoop-completion
 
 # change encoding to UTF-8
 chcp 65001
-
-# clear terminal after initialization
-Clear-Host
 
 function Stop-SSH {
     <#
         .SYNOPSIS
             Stops SSHD service
     #>
+
     Stop-service sshd
     Write-Host "Done." -ForegroundColor Green
-    Beep
+    __Beep
 }
 
 function Start-SSH {
@@ -63,11 +62,12 @@ function Start-SSH {
         .SYNOPSIS
             Starts SSHD service with ngrok
     #>
+
     Start-service sshd
     ngrok tcp 22
 }
 
-function Remove-NV-Cache {
+function global:Remove-NV-Cache {
     <#
         .SYNOPSIS
             Cleans Nvidia driver cache.
@@ -83,25 +83,29 @@ function Remove-NV-Cache {
     Remove-Item "$($env:LOCALAPPDATA)\NVIDIA Corporation\NV_Cache\*" -Recurse -ErrorAction SilentlyContinue
     Remove-Item "$($env:ProgramData)\NVIDIA Corporation\NV_Cache\*" -Recurse -ErrorAction SilentlyContinue
     Remove-Item "$($env:TEMP)\*" -Recurse -ErrorAction SilentlyContinue
-    Write-Host "Done." -ForegroundColor Green
-    Beep
+    
+    __Beep
 }
 
-function Read-Info {
+function global:Read-Info {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+    
     if ($isAdmin) {
         Write-Host "Administrator Rights: $isAdmin" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "Administrator Rights: $isAdmin" -ForegroundColor Red
     }
+
     Write-Host "$($PSVersionTable.OS)" -ForegroundColor DarkCyan
     Write-Host "powershell version $($PSVersionTable.PSVersion)" -ForegroundColor DarkMagenta
     Write-Host "$(git --version)"
     Write-Host "node Version $(node --version)"
-    Beep
+
+    __Beep
 }
 
-function Watch-Perfomance-Usage {
+function global:Watch-Perfomance-Usage {
     <#
         .SYNOPSIS
             Displays perfmance usage every 2 seconds.
@@ -110,374 +114,542 @@ function Watch-Perfomance-Usage {
     #>
 
     $totalRam = (Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).Sum
-    while($true) {
+
+    while ($true) {
         $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $cpuTime = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
         $availMem = (Get-Counter '\Memory\Available MBytes').CounterSamples.CookedValue
         $gpuMem = (((Get-Counter "\GPU Process Memory(*)\Local Usage").CounterSamples | Where-Object CookedValue).CookedValue | Measure-Object -sum).sum
         $gpuUse = (((Get-Counter "\GPU Engine(*engtype_3D)\Utilization Percentage").CounterSamples | Where-Object CookedValue).CookedValue | Measure-Object -sum).sum
-        $date + ' > CPU: ' + $cpuTime.ToString("#,0.000") + '%, Available RAM: ' + $availMem + 'MB (' + (100 * $availMem / ($totalRam / 1MB)).ToString("#,0.0") + '%), GPU usage: ' + $([math]::Round($gpuUse,2)) + '%, GPU Memory: ' + $([math]::Round($gpuMem/1MB,2)) + 'MB'
+        $date + ' > CPU: ' + $cpuTime.ToString("#,0.000") + '%, Available RAM: ' + $availMem + 'MB (' + (100 * $availMem / ($totalRam / 1MB)).ToString("#,0.0") + '%), GPU usage: ' + $([math]::Round($gpuUse, 2)) + '%, GPU Memory: ' + $([math]::Round($gpuMem / 1MB, 2)) + 'MB'
         Start-Sleep -s 2
     }
 }
 
-function ffmpeg-Compress {
+function global:ffmpeg-Compress {
     <#
         .SYNOPSIS
             Compresses video using x265 codec with medium preset.
         .LINK
             https://ffmpeg.org/documentation.html
         .EXAMPLE
-            ffmpeg-Compress -Input video
-            ffmpeg-Compress -Input video.mp4
-            ffmpeg-Compress -Input video.mp4 -Output output.mp4
+            ffmpeg-Compress -InputPath video
+            ffmpeg-Compress -InputPath video.mp4
+            ffmpeg-Compress -InputPath video.mp4 -OutputPath output.mp4
     #>
     Param(
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")] 
-        [Alias("Input", "Inp", "I", "Video")]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [String]
-        $inputFile,
+        $InputPath,
         [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Compression preset. Defaults to Medium")]
-        [Alias("Fast")]
         [String]
-        $preset,
+        $Preset,
         [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Output filename, if no filename specified, <InputFileName>-compressed.mp4 will be used")]
-        [Alias("Output", "Out", "O")]
         [String]
-        $outputFile
+        $OutputPath
     )
     
-    # process video file naming
-    if (!$outputFile) {
-        $file = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
-        $outputFile = "$file-compressed"
-    } else {
-        $extn = [IO.Path]::GetExtension($outputFile)
+    $res = __ValidateCmdlet "ffmpeg"
+
+    if (!$OutputPath) {
+        $File = [System.IO.Path]::GetFileNameWithoutExtension($InputPath)
+        $OutputPath = "$File-compressed"
     }
-    if (!$extn -or $extn -ne "mp4") {
-        $outputFile = "$outputFile.mp4"
+    else {
+        $Extn = [IO.Path]::GetExtension($OutputPath)
     }
 
-    $preset = $preset ? $preset : "medium"
+    if (!$Extn) {
+        $OutputPath = "$OutputPath.mp4"
+    }
 
-    ffmpeg -i $inputFile -c:v libx264 -crf 18 -preset $preset $outputFile
+    $Preset = $Preset ? $Preset : "medium"
 
-    Beep
+    ffmpeg -i $InputPath -c:v libx265 -an -x265-params -crf=25 -c:a copy -preset $Preset $OutputPath
+
+    __Beep
 }
 
-function ffmpeg-Youtube {
-<#
-        .SYNOPSIS
-            Compresses video using optimal settings for the youtube.
-        .LINK
-            https://ffmpeg.org/documentation.html
-        .EXAMPLE
-            ffmpeg-Compress -Input video
-            ffmpeg-Compress -Input video.mp4
-            ffmpeg-Compress -Input video.mp4 -Output output.mp4
-    #>
-    Param(
-        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")] 
-        [Alias("Input", "Inp", "I", "Video")]
-        [String]
-        $inputFile,
-        [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Output filename, if no filename specified, <InputFileName>-compressed.mp4 will be used")]
-        [Alias("Output", "Out", "O")]
-        [String]
-        $outputFile
-    )
-    
-    # process video file naming
-    if (!$outputFile) {
-        $file = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
-        $outputFile = "$file-compressed"
-    } else {
-        $extn = [IO.Path]::GetExtension($outputFile)
-    }
-    if (!$extn) {
-        $outputFile = "$outputFile.mp4"
-    }
-
-    ffmpeg -i $inputFile -vf yadif,format=yuv422p -force_key_frames "expr:gte(t,n_forced/2)" -c:v libx264 -b:v 60M -bf 2 -c:a flac -ac 2 -ar 44100 -strict -2 -use_editlist 0 -movflags +faststart $outputFile
-
-    Beep
-}
-
-function ffmpeg-RemoveAudio {
+function global:ffmpeg-RemoveAudio {
     <#
         .SYNOPSIS
             Removes audio from the video.
         .LINK
             https://ffmpeg.org/documentation.html
         .EXAMPLE
-            ffmpeg-RemoveAudio -Input video
-            ffmpeg-RemoveAudio -Input video.mp4
-            ffmpeg-RemoveAudio -Input video.mp4 -Output output.mp4
+            ffmpeg-RemoveAudio -InputPath video
+            ffmpeg-RemoveAudio -InputPath video.mp4
+            ffmpeg-RemoveAudio -InputPath video.mp4 -OutputPath output.mp4
     #>
     Param(
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")] 
-        [Alias("Input", "Inp", "I", "Video")]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [String]
-        $inputFile,
+        $InputPath,
         [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Output filename, if no filename specified, <InputFileName>-noaudio.mp4 will be used")]
-        [Alias("Output", "Out", "O")]
         [String]
-        $outputFile
+        $OutputPath
     )
     
-    # process video file naming
-    if (!$outputFile) {
-        $file = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
-        $outputFile = "$file-noaudio"
-    } else {
-        $extn = [IO.Path]::GetExtension($outputFile)
+    $res = __ValidateCmdlet "ffmpeg"
+    
+    if (!$OutputPath) {
+        $File = [System.IO.Path]::GetFileNameWithoutExtension($InputPath)
+        $OutputPath = "$File-noaudio"
     }
-    if (!$extn) {
-        $outExtn = [IO.Path]::GetExtension($inputFile) ? [IO.Path]::GetExtension($inputFile) : ".mp4"
-        $outputFile = "$outputFile$outExtn"
+    else {
+        $Extn = [IO.Path]::GetExtension($OutputPath)
     }
 
-    ffmpeg -i $inputFile -an -c copy -y $outputFile
+    if (!$Extn) {
+        $Extn = [IO.Path]::GetExtension($InputPath) ? [IO.Path]::GetExtension($InputPath) : ".mp4"
+        $OutputPath = "$OutputPath$Extn"
+    }
 
-    Beep
+    ffmpeg -i $InputPath -an -c copy -y $OutputPath
+
+    __Beep
 }
 
-function ffmpeg-ExtractAudio {
+function global:ffmpeg-ExtractAudio {
     <#
         .SYNOPSIS
             Extracts audio from the video.
         .LINK
             https://ffmpeg.org/documentation.html
         .EXAMPLE
-            ffmpeg-ExtractAudio -Input video
-            ffmpeg-ExtractAudio -Input video.mp4
-            ffmpeg-ExtractAudio -Input video.mp4 -Output output.m4a
+            ffmpeg-ExtractAudio -InputPath video
+            ffmpeg-ExtractAudio -InputPath video.mp4
+            ffmpeg-ExtractAudio -InputPath video.mp4 -OutputPath output.m4a
     #>
     Param(
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")] 
-        [Alias("Input", "Inp", "I", "Video")]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [String]
-        $inputFile,
+        $InputPath,
         [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Output filename, if no filename specified, <InputFileName>-audio.m4a will be used")]
-        [Alias("Output", "Out", "O")]
         [String]
-        $outputFile
+        $OutputPath
     )
     
-    # process video file naming
-    if (!$outputFile) {
-        $file = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
-        $outputFile = "$file-audio"
-    } else {
-        $extn = [IO.Path]::GetExtension($outputFile)
+    $res = __ValidateCmdlet "ffmpeg"
+    
+    if (!$OutputPath) {
+        $File = [System.IO.Path]::GetFileNameWithoutExtension($InputPath)
+        $OutputPath = "$File-audio.mp3"
     }
-    if (!$extn) {
-        $outputFile = "$outputFile.m4a"
+    else {
+        $Extn = [IO.Path]::GetExtension($OutputPath)
     }
 
-    ffmpeg -i $inputFile -vn -acodec copy $outputFile
+    if (!$Extn) {
+        $OutputPath = "$OutputPath.mp3"
+    }
 
-    Beep
+    ffmpeg -i $InputPath -vn -acodec copy $OutputPath
+
+    __Beep
 }
 
-function ffmpeg-ChangeSpeed {
+function global:ffmpeg-ChangeSpeed {
     <#
         .SYNOPSIS
             Changes speed of the video.
         .LINK
             https://ffmpeg.org/documentation.html
         .EXAMPLE
-            ffmpeg-ChangeSpeed -Input video -Speed 1.5
-            ffmpeg-ChangeSpeed -Input video.mp4 -Speed 0.5
-            ffmpeg-ChangeSpeed -Input video.mp4 -Speed 1.3 -Output output.mp4
+            ffmpeg-ChangeSpeed -InputPath video -Speed 1.5
+            ffmpeg-ChangeSpeed -InputPath video.mp4 -Speed 0.5
+            ffmpeg-ChangeSpeed -InputPath video.mp4 -Speed 1.3 -OutputPath output.mp4
     #>
     Param(
-        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")] 
-        [Alias("Input", "Inp", "I", "Video")]
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [String]
-        $inputFile,
+        $InputPath,
         [Parameter(Mandatory = $true, Position = 1, HelpMessage = "Video speed multiplier, to slow down video use values < 1")]
-        [Alias("Spd", "S")]
         [Double]
-        $speed,
+        $Speed,
         [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Output filename, if no filename specified, <InputFileName>-x<speed>.mp4 will be used")]
-        [Alias("Output", "Out", "O")]
         [String]
-        $outputFile
+        $OutputPath
     )
+    
+    $res = __ValidateCmdlet "ffmpeg"
 
-    # get video and audio speed
-    $speed = 1 / $speed
-    if (!$speed) {
-        $speed = (0.5)
-    }
-    $audioSpeed = (1 / $speed)
+    $Speed = 1 / $Speed
 
-    # process video file naming
-    if (!$outputFile) {
-        $file = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
-        $outputFile = "$file-x$(1 / $speed)"
-    } else {
-        $extn = [IO.Path]::GetExtension($outputFile)
-    }
-    if (!$extn) {
-        $outExtn = [IO.Path]::GetExtension($inputFile) ? [IO.Path]::GetExtension($inputFile) : ".mp4"
-        $outputFile = "$outputFile$outExtn"
+    if (!$Speed) {
+        $Speed = (0.5)
     }
 
-    ffmpeg -i $inputFile -vf "setpts=$speed*PTS" -filter:a "atempo=$audioSpeed" $outputFile
+    $audioSpeed = (1 / $Speed)
 
-    Beep
+    if (!$OutputPath) {
+        $File = [System.IO.Path]::GetFileNameWithoutExtension($InputPath)
+        $OutputPath = "$File-x$(1 / $Speed)"
+    }
+    else {
+        $Extn = [IO.Path]::GetExtension($OutputPath)
+    }
+    
+    if (!$Extn) {
+        $Extn = [IO.Path]::GetExtension($InputPath) ? [IO.Path]::GetExtension($InputPath) : ".mp4"
+        $OutputPath = "$OutputPath$Extn"
+    }
+
+    ffmpeg -i $InputPath -vf "setpts=$Speed*PTS" -filter:a "atempo=$audioSpeed" $OutputPath
+
+    __Beep
 }
 
-function ffmpeg-Trim {
+function global:ffmpeg-Trim {
     <#
         .SYNOPSIS
             Trims the video.
         .LINK
             https://ffmpeg.org/documentation.html
         .EXAMPLE
-            ffmpeg-ChangeSpeed -Input video -Start 01:40:00
-            ffmpeg-ChangeSpeed -Input video.mp4 -Start 0:38:30 -End 1:10:10
-            ffmpeg-ChangeSpeed -Input video.mp4 -Start 0:38:30 -End 1:10:10 -Output out.mp4
+            ffmpeg-ChangeSpeed -InputPath video -Start 01:40:00
+            ffmpeg-ChangeSpeed -InputPath video.mp4 -Start 0:38:30 -End 1:10:10
+            ffmpeg-ChangeSpeed -InputPath video.mp4 -Start 0:38:30 -End 1:10:10 -OutputPath out.mp4
     #>
     Param(
-        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")] 
-        [Alias("Input", "Inp", "I", "Video")]
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Input filename, if no extension specified, mp4 will be used")]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [String]
-        $inputFile,
+        $InputPath,
         [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Start time of the video trimming. Note that you can use two different time unit formats: sexagesimal (HOURS:MM:SS.MILLISECONDS, as in 01:23:45.678), or in seconds.")]
-        [Alias("S, From, F")]
         [String]
-        $start,
+        $Start,
         [Parameter(Mandatory = $false, Position = 2, HelpMessage = "End time of the video trimming. Note that you can use two different time unit formats: sexagesimal (HOURS:MM:SS.MILLISECONDS, as in 01:23:45.678), or in seconds.")]
-        [Alias("E, To, T")]
         [String]
-        $end,
+        $End,
         [Parameter(Mandatory = $false, Position = 3, HelpMessage = "Output filename, if no filename specified, <InputFileName>-x<speed>.mp4 will be used")]
-        [Alias("Output", "Out", "O")]
         [String]
-        $outputFile
+        $OutputPath
     )
 
-    # return if neither start nor end defined
-    if (!$start -and !$end) {
-        Write-Host "End or start of the section to trim must be specified."
-        return
+    $res = __ValidateCmdlet "ffmpeg"
+
+    if (!$Start -and !$End) {
+        __WriteError "End or start of the section to trim must be specified."
+        
+        EXIT 1
     }
 
-    # process video file naming
-    if (!$outputFile) {
-        $file = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
-        $outputFile = "$file-trimmed-$($start ? $start.Replace(":", ".") : "start")-$($end ? $end.Replace(":", ".") : "end")"
-    } else {
-        $extn = [IO.Path]::GetExtension($outputFile)
+    if (!$OutputPath) {
+        $File = [System.IO.Path]::GetFileNameWithoutExtension($InputPath)
+        $OutputPath = "$File-trimmed-$($Start ? $Start.Replace(":", ".") : "start")-$($End ? $End.Replace(":", ".") : "end")"
     }
-    if (!$extn) {
-        $outExtn = [IO.Path]::GetExtension($inputFile) ? [IO.Path]::GetExtension($inputFile) : ".mp4"
-        $outputFile = "$outputFile$outExtn"
-    }
-
-    # if end is not defined use video length
-    if (!$end) {
-        $end = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $inputFile
+    else {
+        $Extn = [IO.Path]::GetExtension($OutputPath)
     }
     
-    $start = $start ? $start : 0
+    if (!$Extn) {
+        $Extn = [IO.Path]::GetExtension($InputPath) ? [IO.Path]::GetExtension($InputPath) : ".mp4"
+        $OutputPath = "$OutputPath$Extn"
+    }
 
-    ffmpeg -i $inputFile -ss $start -to $end $outputFile
+    if (!$End) {
+        $End = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $InputPath
+    }
+    
+    $Start = $Start ? $Start : 0
 
-    Beep
+    ffmpeg -i $InputPath -ss $Start -to $End $OutputPath
+
+    __Beep
 }
 
-# DEFAULT DOWNLOAD PATH
-$ytDownloadPath = "$env:USERPROFILE\Desktop"
-
-function yt-Audio {
+function global:Youtube-Audio {
     <#
         .SYNOPSIS
             Downloads audio from the youtube video
         .LINK
             https://github.com/yt-dlp/yt-dlp
-        .EXAMPLE
-            yt-Audio https://youtu.be/dQw4w9WgXcQ
     #>
     Param(
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Youtube video link")] 
-        [Alias("Input", "Inp", "I", "Video", "Lnk", "L")]
         [String]
-        $link
+        $Link,
+        [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Target path")] 
+        [ValidateScript({ Test-Path $_ -PathType Container })]
+        [String]
+        $Path = "./"
     )
 
-    & yt-dlp -f 251 --extract-audio --audio-format opus --audio-quality 0 --embed-thumbnail --convert-thumbnails jpg --exec-before-download "magick convert %(thumbnails.-1.filepath)q -fuzz 25% -trim -quality 100 -sampling-factor 4:2:0 -define jpeg:dct-method=float %(thumbnails.-1.filepath)q" --add-metadata -P $ytDownloadPath  -o "%(creator)s - %(title)s.%(ext)s" "$link"
-    Beep
+    $res = __ValidateCmdlet "yt-dlp"
+
+    & yt-dlp -f 251 --extract-audio --audio-format opus --audio-quality 0 --embed-thumbnail --convert-thumbnails jpg --exec-before-download "magick convert %(thumbnails.-1.filepath)q -fuzz 25% -trim -quality 100 -sampling-factor 4:2:0 -define jpeg:dct-method=float %(thumbnails.-1.filepath)q" --add-metadata -P $Path  -o "%(creator)s - %(title)s.%(ext)s" "$Link"
+
+    __Beep
 }
 
-function yt-Thumbnail {
+function global:Youtube-Thumbnail {
     <#
         .SYNOPSIS
-            Downloads audio from the youtube video
+            Downloads thumbnail from the youtube video
         .LINK
             https://github.com/yt-dlp/yt-dlp
-        .EXAMPLE
-            yt-Audio https://youtu.be/dQw4w9WgXcQ
     #>
     Param(
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Youtube video link")] 
-        [Alias("Input", "Inp", "I", "Video", "Lnk", "L")]
         [String]
-        $link
+        $Link,
+        [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Target path")] 
+        [ValidateScript({ Test-Path $_ -PathType Container })]
+        [String]
+        $Path = "./"
     )
+    
+    $res = __ValidateCmdlet "yt-dlp"
 
-    & yt-dlp --write-thumbnail --skip-download -P $ytDownloadPath "$link"
+    & yt-dlp --write-thumbnail --skip-download -P $Path "$Link"
 
-    Beep
+    __Beep
 }
 
-function Magick-ConvertSvgToPng {
+function global:Magick-ConvertSvg {
     <#
         .SYNOPSIS
             Converts svg image to png
     #>
     Param(
-        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "File name")] 
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path")] 
         [String]
-        $filename,
-        [Parameter(Mandatory = $false, Position = 10, HelpMessage = "Density")] 
+        $Path,
+        [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Density")] 
         [String]
-        $density = 1000
+        $Density = 1000
+    )
+    
+    $res = __ValidateCmdlet "magick"
+
+    $SupportedExtensions = $(
+        ".svg"
     )
 
-    $newFilename = Modify-Filename $filename "magick" "png"
 
-    magick convert +antialias -background none -density "$density" "$filename" "$newFilename"
+    if (Test-Path -Path $Path -PathType Container) {
+        $Files = Get-ChildItem -Path $Path -File | Where-Object { [IO.Path]::GetExtension($_) -in $SupportedExtensions }
 
-    Beep
-}
+        if (-not (Test-Path "./magick")) {
+            New-Item -ItemType Directory -Path "./magick" | Out-Null
+        }
 
-function Modify-Filename {
-    Param(
-        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "File name")] 
-        [String]
-        $filename,
-        [Parameter(Mandatory = $true, Position = 1, HelpMessage = "Modifier")] 
-        [String]
-        $modifier,
-        [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Extension")] 
-        [String]
-        $extension
-    )
-    $file = [System.IO.Path]::GetFileNameWithoutExtension($filename)
-    if (!$extension) {
-        $extension = [IO.Path]::GetExtension($filename)
+        foreach ($File in $Files) {
+            $TargetFilename = __ModifyFilename $File "magick" "png"
+    
+            magick convert +antialias -background none -density "$Density" "$File" "./magick/$TargetFilename"
+        }
     }
-    return "$file-$modifier.$extension";
+    elseif (Test-Path -Path $Path -PathType Leaf) {
+        $res = __ValidateFileExtension $path $SupportedExtensions
+
+        $TargetFilename = __ModifyFilename $Path "magick" "png"
+
+        magick convert +antialias -background none -density "$Density" "$Path" "./$TargetFilename"
+    }
+
+    __Beep
 }
 
-function Beep {
+function global:Opus-Convert {
+    <#
+        .SYNOPSIS
+            Converts audio file to opus
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path")] 
+        [String]
+        $Path,
+        [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Bitrate, kbps")] 
+        [String]
+        $Bitrate = 320
+    )
+
+    $res = __ValidateCmdlet "opusenc"
+
+    $SupportedExtensions = $(
+        ".aiff",
+        ".mp3",
+        ".flac",
+        ".ogg",
+        ".oga",
+        ".mogg",
+        ".raw",
+        ".wav"
+    )
+
+    if (Test-Path -Path $Path -PathType Container) {
+        $Files = Get-ChildItem -Path $Path -File | Where-Object { [IO.Path]::GetExtension($_) -in $SupportedExtensions }
+
+        if (-not (Test-Path "./opus")) {
+            New-Item -ItemType Directory -Path "./opus" | Out-Null
+        }
+
+        foreach ($File in $Files) {
+            $TargetFilename = __ModifyFilename $File -Extension "opus"
+            
+            opusenc --bitrate "$($Bitrate)kbps" $File "./opus/$TargetFilename"
+        }
+    }
+    elseif (Test-Path -Path $Path -PathType Leaf) {
+        $res = __ValidateFileExtension $path $SupportedExtensions
+
+        $TargetFilename = __ModifyFilename $Path -Extension "opus"
+        
+        opusenc --bitrate "$($Bitrate)kbps" $Path "./$TargetFilename"
+    }
+
+    __Beep
+}
+
+function global:__ValidateFileExtension {
+    <#
+        .SYNOPSIS
+            Validates file extensions
+    #>
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
+        [string]$Filename,
+        [Parameter(Position = 1)]
+        [string[]]$SupportedExtensions
+    )
+
+    $FileExtension = [System.IO.Path]::GetExtension($Filename)
+
+    if (-not $SupportedExtensions.Contains($FileExtension)) {
+        $SupportedExtensionsString = ($SupportedExtensions -join ', ').ToLower()
+        __WriteError "File '$Filename' has invalid extension. Supported extensions are: $SupportedExtensionsString"
+        
+        EXIT 1
+    }
+}
+
+function private:__ValidateCmdlet {
+    <#
+        .SYNOPSIS
+            Validates Cmdlet
+    #>
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Command
+    )
+
+    $Result = Get-Command $Command -ErrorAction SilentlyContinue
+
+    if (!$Result) {
+        __WriteError "Command '$Command' is required to run this command"
+
+        EXIT 1
+    }
+}
+
+function private:__ModifyFilename {
+    <#
+        .SYNOPSIS
+            Transforms filename
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Filename")] 
+        [String]
+        $Filename,
+        [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Prefix")] 
+        [String]
+        $Prefix,
+        [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Postfix")] 
+        [String]
+        $Postfix,
+        [Parameter(Mandatory = $false, Position = 3, HelpMessage = "Target Extension")] 
+        [String]
+        $Extension
+    )
+
+    $ResultFile = ""
+
+    if ($Prefix) {
+        $ResultFile += "$Prefix-"
+    }
+
+    $ResultFile += [System.IO.Path]::GetFileNameWithoutExtension($Filename)
+
+    if ($Postfix) {
+        $ResultFile += "-$Postfix"
+    }
+    
+    if (!$Extension) {
+        $Extension = [IO.Path]::GetExtension($Filename)
+    }
+
+    return "$ResultFile.$Extension"
+}
+
+function private:__WriteError {
+    <#
+        .SYNOPSIS
+            Outputs formatted error
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Text")] 
+        [String]
+        $Message
+    )
+    
+    Write-Host "`e[31mError:`e[0m $Message"
+}
+
+function private:__WriteSuccess {
+    <#
+        .SYNOPSIS
+            Outputs formatted success
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Text")] 
+        [String]
+        $Message
+    )
+    
+    Write-Host "`e[32m+`e[0m $Message"
+}
+
+function private:__WriteFail {
+    <#
+        .SYNOPSIS
+            Outputs formatted fail
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Text")] 
+        [String]
+        $Message
+    )
+    
+    Write-Host "`e[31m-`e[0m $Message"
+}
+
+function private:__WriteInfo {
+    <#
+        .SYNOPSIS
+            Outputs formatted info
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Text")] 
+        [String]
+        $Message
+    )
+    
+    Write-Host "`e[33m!`e[0m $Message"
+}
+
+function private:__Beep {
     <#
         .SYNOPSIS
             Makes system sound
     #>
     [System.Media.SystemSounds]::Hand.Play()
 }
+
+Invoke-Expression (& { (zoxide init powershell --cmd cd | Out-String) })
