@@ -33,20 +33,18 @@ $PSReadLineOptions = @{
 
 Set-PSReadLineOption @PSReadLineOptions
 
-# init oh-my-posh with a theme
-oh-my-posh --init --shell pwsh --config "$env:USERPROFILE\oh-my-posh\inasena.json" | Invoke-Expression
-
 # import modules
 Enable-PowerType
-Import-Module -Name Terminal-Icons
-Import-Module -Name posh-git
-Import-Module -Name DockerCompletion
-Import-Module -Name scoop-completion
+# Import-Module -Name Terminal-Icons
+# Import-Module -Name posh-git
 
 # change encoding to UTF-8
 chcp 65001
 
-function Stop-SSH {
+# init oh-my-posh with a theme
+oh-my-posh --init --shell pwsh --config "$env:USERPROFILE\oh-my-posh\inasena.yaml" | Invoke-Expression
+
+function global:Stop-SSH {
     <#
         .SYNOPSIS
             Stops SSHD service
@@ -57,7 +55,7 @@ function Stop-SSH {
     __Beep
 }
 
-function Start-SSH {
+function global:Start-SSH {
     <#
         .SYNOPSIS
             Starts SSHD service with ngrok
