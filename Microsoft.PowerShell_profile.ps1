@@ -411,7 +411,7 @@ function global:Get-YoutubeThumbnail {
     Invoke-InternalBeep
 }
 
-function global:ConvertTo-SVG {
+function global:ConvertTo-PNG {
     <#
         .SYNOPSIS
             Converts svg image to png
@@ -431,7 +431,6 @@ function global:ConvertTo-SVG {
         ".svg"
     )
 
-
     if (Test-Path -Path $Path -PathType Container) {
         $Files = Get-ChildItem -Path $Path -File | Where-Object { [IO.Path]::GetExtension($_) -in $SupportedExtensions }
 
@@ -440,7 +439,7 @@ function global:ConvertTo-SVG {
         }
 
         foreach ($File in $Files) {
-            $TargetFilename = Format-Filename $File "magick" "png"
+            $TargetFilename = Format-Filename $File "magick" -Extension "png"
     
             magick convert +antialias -background none -density "$Density" "$File" "./magick/$TargetFilename"
         }
@@ -448,12 +447,36 @@ function global:ConvertTo-SVG {
     elseif (Test-Path -Path $Path -PathType Leaf) {
         $null = Test-InternalFileExtension $path $SupportedExtensions
 
-        $TargetFilename = Format-Filename $Path "magick" "png"
+        $TargetFilename = Format-Filename $Path "magick" -Extension "png"
 
         magick convert +antialias -background none -density "$Density" "$Path" "./$TargetFilename"
     }
 
     Invoke-InternalBeep
+}
+
+function global:Invoke-SvgRemoveUnregistered {
+    <#
+        .SYNOPSIS
+            Removes UNREGISTERED text from the svg
+    #>
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path")] 
+        [String]
+        $Path
+    )
+    
+    $null = Test-InternalCmdlet "sed"
+
+    $SupportedExtensions = $(
+        ".svg"
+    )
+
+    $null = Test-InternalFileExtension $Path $SupportedExtensions
+
+    $TargetFilename = Format-Filename $Path "no-unregistered" -Extension "svg"
+
+    $(sed -E "i dons/<text[^>]+>UNREGISTERED<\/text>//g" "$Path") > "$TargetFilename"
 }
 
 function global:ConvertTo-Opus {
@@ -530,7 +553,7 @@ function global:Test-InternalFileExtension {
     }
 }
 
-function private:Test-InternalCmdlet {
+function global:Test-InternalCmdlet {
     <#
         .SYNOPSIS
             Validates Cmdlet
@@ -549,7 +572,7 @@ function private:Test-InternalCmdlet {
     }
 }
 
-function private:Format-Filename {
+function global:Format-Filename {
     <#
         .SYNOPSIS
             Transforms filename
@@ -588,7 +611,7 @@ function private:Format-Filename {
     return "$ResultFile.$Extension"
 }
 
-function private:Write-InternalError {
+function global:Write-InternalError {
     <#
         .SYNOPSIS
             Outputs formatted error
@@ -602,7 +625,7 @@ function private:Write-InternalError {
     Write-Host "`e[31mError:`e[0m $Message"
 }
 
-function private:Write-InternalSuccess {
+function global:Write-InternalSuccess {
     <#
         .SYNOPSIS
             Outputs formatted success
@@ -616,7 +639,7 @@ function private:Write-InternalSuccess {
     Write-Host "`e[32m+`e[0m $Message"
 }
 
-function private:Write-InternalFail {
+function global:Write-InternalFail {
     <#
         .SYNOPSIS
             Outputs formatted fail
@@ -630,7 +653,7 @@ function private:Write-InternalFail {
     Write-Host "`e[31m-`e[0m $Message"
 }
 
-function private:Write-InternalInfo {
+function global:Write-InternalInfo {
     <#
         .SYNOPSIS
             Outputs formatted info
@@ -644,10 +667,15 @@ function private:Write-InternalInfo {
     Write-Host "`e[33m!`e[0m $Message"
 }
 
-function private:Invoke-InternalBeep {
+function global:Invoke-InternalBeep {
     <#
         .SYNOPSIS
             Makes system sound
     #>
     [System.Media.SystemSounds]::Hand.Play()
 }
+
+#34de4b3d-13a8-4540-b76d-b9e8d3851756 PowerToys CommandNotFound module
+
+Import-Module "C:\Program Files\PowerToys\WinUI3Apps\..\WinGetCommandNotFound.psd1"
+#34de4b3d-13a8-4540-b76d-b9e8d3851756
