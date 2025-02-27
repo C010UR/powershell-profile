@@ -1,0 +1,8 @@
+*
+
+!.gitignore
+!commands.ps1
+!utils.ps1
+!TagLibSharp.dll
+!Microsoft.PowerShell_profile.ps1
+!Microsoft.VSCode_profile.ps1
